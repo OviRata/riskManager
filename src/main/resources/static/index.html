@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Live Risk Dashboard</title>
+    <style>
+        body { font-family: 'Courier New', Courier, monospace; background-color: #121212; color: #00ff00; padding: 20px; }
+        h1 { color: #ffffff; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background-color: #1e1e1e; }
+        th, td { border: 1px solid #333; padding: 12px; text-align: left; }
+        th { background-color: #2d2d2d; color: #ffffff; }
+        .positive { color: #00ff00; }
+        .negative { color: #ff3333; }
+    </style>
+    <!-- STOMP and SockJS libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.1/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+</head>
+<body>
+
+<h1>Live Risk Exposure Engine</h1>
+<p>Status: <span id="status" style="color: yellow;">Connecting...</span></p>
+
+<table>
+    <thead>
+    <tr>
+        <th>Symbol</th>
+        <th>Net Position (Shares)</th>
+        <th>Total Capital Tied Up ($)</th>
+    </tr>
+    </thead>
+    <tbody id="risk-table-body">
+    <!-- Data will be injected here by JavaScript -->
+    </tbody>
+</table>
+
+<script>
+    // 1. Connect to the Spring Boot WebSocket endpoint
+    const socket = new SockJS('/ws-risk');
+    const stompClient = Stomp.over(socket);
+
+    // Disable debug logging in console for a cleaner output
+    stompClient.debug = null;
+
+    stompClient.connect({}, function (frame) {
+        document.getElementById('status').innerText = 'Connected - Listening for live trades...';
+        document.getElementById('status').style.color = '#00ff00';
+
+        // 2. Subscribe to the topic we defined in the backend
+        stompClient.subscribe('/topic/riskUpdates', function (message) {
+            const exposure = JSON.parse(message.body);
+            updateDashboard(exposure);
+        });
+    }, function(error) {
+        document.getElementById('status').innerText = 'Connection Lost!';
+        document.getElementById('status').style.color = '#ff3333';
+    });
+
+    function updateDashboard(exposure) {
+        const tableBody = document.getElementById('risk-table-body');
+        let row = document.getElementById('row-' + exposure.symbol);
+
+        // Formatting colors based on long (positive) or short (negative) positions
+        const positionClass = exposure.netPosition >= 0 ? 'positive' : 'negative';
+        const capitalClass = exposure.totalCapitalTiedUp >= 0 ? 'positive' : 'negative';
+
+        // If the row doesn't exist yet, create it
+        if (!row) {
+            row = document.createElement('tr');
+            row.id = 'row-' + exposure.symbol;
+            tableBody.appendChild(row);
+        }
+
+        // Update the row with the fresh data instantly
+        row.innerHTML = `
+                <td><strong>${exposure.symbol}</strong></td>
+                <td class="${positionClass}">${exposure.netPosition}</td>
+                <td class="${capitalClass}">$${exposure.totalCapitalTiedUp.toFixed(2)}</td>
+            `;
+    }
+</script>
+</body>
+</html>
