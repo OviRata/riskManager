@@ -39,8 +39,15 @@ public class TradeProducer {
 
         Trade trade = new Trade(tradeId, symbol, quantity, price, side);
 
-        // Send to Kafka topic "trades". The second argument is the KEY.
+        // Send the original trade
         kafkaTemplate.send("trades", symbol, trade);
+        log.info("Published trade: {}", trade);
+
+        // 10% chance to simulate a network glitch and send the EXACT SAME trade again
+        if (random.nextInt(10) == 0) {
+            log.warn("Simulating Kafka network retry... resending trade: {}", trade.tradeId());
+            kafkaTemplate.send("trades", symbol, trade);
+        }
 
         log.info("Published trade: {}", trade);
     }
